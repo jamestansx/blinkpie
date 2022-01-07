@@ -1,22 +1,3 @@
-"""
-POST FORMAT:
-    data = {"data":"send from data"}
-    notification = {"notification":"send from notification"}
-    profile = {
-        "profile":
-            {
-                "UUID": "thisisuuid",
-                "name": "myname",
-                "description": "helloworld"
-            }
-    }
-----------------------------------------------------------------
-GET FORMAT:
-    data = "data"
-    notification = "notification"
-    profile = {"profile": "my_uuid"}
-"""
-
 import json
 import logging
 from socket import gethostbyname, gethostname

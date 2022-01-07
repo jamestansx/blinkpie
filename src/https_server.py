@@ -1,6 +1,8 @@
 """
 POST
  FORMAT:
+    data = { "data": { "parameter": "value" } }
+
     data = {
         "data":
             {
@@ -22,23 +24,15 @@ POST
             }
     }
  STORAGE:
-    "data": [
-        {
-            "parameter1": "value"
-        },
-        {
+    "data": {
+            "parameter1": "value",
             "parameter2": "value"
-        }
-    ]
+    }
 
-    "notification": [
-        {
-            "title1": "message"
-        },
-        {
+    "notification": {
+            "title1": "message",
             "title2": "message"
-        }
-    ]
+    }
 
     "profile": [
         {
@@ -64,6 +58,7 @@ import json
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from os import makedirs
+import os
 from os.path import exists, join
 from pathlib import Path
 from ssl import wrap_socket
@@ -145,59 +140,70 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
             for key in content:
                 logger.debug("key: %s", key)
                 logger.debug("params key: %s", params[next(iter(params))])
-                if (next(iter(params)) == "profile") and self._check_profile(key, params):
+                if (next(iter(params)) == "profile") and self._check_profile(
+                    key, params
+                ):
                     return
                 else:
+                    logger.debug("Key: %s", key)
                     if params[next(iter(params))] in key:
                         self._set_response()
-                        self.wfile.write(key[params[next(iter(params))]].encode())
+                        self.wfile.write(content[key].encode())
                         return
             else:
                 self._set_response(404)
 
     def do_POST(self):
         content_length = int(self.headers["Content-Length"])
-        content = json.loads(str(self.rfile.read(content_length).decode()))
+        content: dict = json.loads(
+            str(self.rfile.read(content_length).decode())
+        )
+        logger.debug("Read %s", content)
         if not self._check_content_validity(content):
             self._set_response(400)
             return
         try:
-            for data in content:
-                self._write_content(content, data)
+            if next(iter(content)) == "profile":
+                self._write_profile(self.params[next(iter(content))], content)
+            else:
+                self._write_content(self.params[next(iter(content))], content)
             self._set_response()
         except Exception as e:
+            logger.error("Error in POST: %s", e)
             self._set_response(400)
 
-    def _write_content(self, content: dict, mode: str):
-        filepath = self.database
-        data = {}
-        if mode == self.params["profile"]:
-            filepath = self.profiledb
-
-        with open(filepath, "r", encoding="utf-8") as f:
-            try:
+    def _write_content(self, filepath: str, content: dict):
+        data = dict()
+        if os.stat(filepath).st_size == 0:
+            data = {"data": dict(), "notification": dict()}
+        else:
+            with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            except json.decoder.JSONDecodeError as e:
-                # New File
-                logger.warning("File is not valid JSON: %s", e)
-                if mode == self.params["profile"]:
-                    data = {"profile": []}
-                else:
-                    data = {"data": "", "notification": ""}
-            finally:
-                if mode == self.params["profile"]:
-                    dat = data["profile"]
-                    if isinstance(dat, list):
-                        dat.append(content[self.params["profile"]])
-                    else:
-                        dat = [content[self.params["profile"]]]
-                else:
-                    for key, value in content.items():
-                        data[key] = value
         with open(filepath, "w", encoding="utf-8") as f:
+            update_content = content[next(iter(content))]
+            data[next(iter(content))].update(update_content)
             json.dump(data, f, ensure_ascii=False, indent=4)
 
-    def _check_profile(self,key: dict,params: dict) -> bool:
+    def _write_profile(self, filepath: str, content: dict):
+        data = dict()
+        if os.stat(filepath).st_size == 0:
+            data = {"profile": list()}
+        else:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        with open(filepath, "w", encoding="utf-8") as f:
+            update_content = content[next(iter(content))]
+            logger.debug("Attempting to write (profile)")
+            for i in data[next(iter(content))]:
+                logger.debug("value of list: %s", i)
+                if i["UUID"] == content[next(iter(content))]["UUID"]:
+                    i.update(update_content)
+                    break
+            else:
+                data[next(iter(content))].append(update_content)
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+    def _check_profile(self, key: dict, params: dict) -> bool:
         logger.debug("Checking profile")
         logger.debug("key: %s", key)
         logger.debug("key content: %s", key[next(iter(key))])
@@ -207,7 +213,6 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(key).encode())
             return True
         return False
-
 
 
 def main(serveraddress: Tuple, certfile: str):
