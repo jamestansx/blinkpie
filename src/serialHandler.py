@@ -57,38 +57,42 @@ def setProfile(uuid):
     return do_post(server, json.dumps(dicts))
 
 
-def connect():
-    get_data = ""
-    logger.debug("Connecting to Arduino...")
-    while get_data == "":
-        get_data = do_read(port)
-        if get_data != "":
-            data = do_get(server, json.loads(get_data))
-            content = json.loads(data.text)
-            status = data.status_code
-            if status == 200:
-                logger.info("Connected to device:")
-                logger.info(f"Name: {content['name']}")
-                logger.info(f"Description: {content['description']}")
-                do_write(port, SUCCESS_CODE)
-                return True
-            elif status == 404:
-                logger.warning("Arduino is not registered.. Please setup again")
-                return False
+def connect(get_data:str):
+    logger.debug(f"Connecting to Arduino: {get_data}")
+    data = do_get(server, json.loads(get_data))
+    content = json.loads(data.text)
+    status = data.status_code
+    if status == 200:
+        logger.info("Connected to device:")
+        logger.info(f"Name: {content['name']}")
+        logger.info(f"Description: {content['description']}")
+        do_write(port, SUCCESS_CODE)
+        return True
+    elif status == 404:
+        logger.warning("Arduino is not registered.. Please setup again")
+        return False
 
 
 def main():
     try:
-        if not connect():
-            setProfile(genUUID())
         while True:
             readData = do_read(port)
-            if parse_data(readData):
-                logger.info("GET ---> SERVER")
+            if "profile" in readData:
+                if not connect(readData):
+                    setProfile(genUUID())
+                continue
+            is_GET = parse_data(readData)
+            if is_GET:
+                logger.info("GET <--- SERVER")
                 getData = do_get(server, readData)
                 do_write(port, getData.text)
-                while SUCCESS_CODE not in do_read(port):
-                    ...
+                status = ""
+                while status != SUCCESS_CODE:
+                    status = do_read(port)
+                    if "profile" in status:
+                        if not connect(status):
+                            setProfile(genUUID())
+                        break
             else:
                 logger.info("POST ---> SERVER")
                 _ = do_post(server, json.loads(readData))
