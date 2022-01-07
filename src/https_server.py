@@ -56,9 +56,9 @@ GET FORMAT:
 
 import json
 import logging
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from os import makedirs
-import os
 from os.path import exists, join
 from pathlib import Path
 from ssl import wrap_socket
@@ -129,23 +129,17 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         params = urlparse(self.path).query
         params = dict(qc.split("=") for qc in params.split("&"))
-        logger.debug("GET: %s", params)
         if not self._check_content_validity(params):
             self.send_response(400)
             return
         with open(self.params[next(iter(params))], "r") as f:
-            logger.debug("Opening %s", self.params[next(iter(params))])
             content: list = json.loads(f.read())[next(iter(params))]
-            logger.debug("Read %s", content)
             for key in content:
-                logger.debug("key: %s", key)
-                logger.debug("params key: %s", params[next(iter(params))])
                 if (next(iter(params)) == "profile") and self._check_profile(
                     key, params
                 ):
                     return
                 else:
-                    logger.debug("Key: %s", key)
                     if params[next(iter(params))] in key:
                         self._set_response()
                         self.wfile.write(content[key].encode())
@@ -158,7 +152,6 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
         content: dict = json.loads(
             str(self.rfile.read(content_length).decode())
         )
-        logger.debug("Read %s", content)
         if not self._check_content_validity(content):
             self._set_response(400)
             return
@@ -193,9 +186,7 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
                 data = json.load(f)
         with open(filepath, "w", encoding="utf-8") as f:
             update_content = content[next(iter(content))]
-            logger.debug("Attempting to write (profile)")
             for i in data[next(iter(content))]:
-                logger.debug("value of list: %s", i)
                 if i["UUID"] == content[next(iter(content))]["UUID"]:
                     i.update(update_content)
                     break
@@ -204,10 +195,6 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
             json.dump(data, f, ensure_ascii=False, indent=4)
 
     def _check_profile(self, key: dict, params: dict) -> bool:
-        logger.debug("Checking profile")
-        logger.debug("key: %s", key)
-        logger.debug("key content: %s", key[next(iter(key))])
-        logger.debug("params content: %s", params[next(iter(params))])
         if key[next(iter(key))] == params[next(iter(params))]:
             self._set_response()
             self.wfile.write(json.dumps(key).encode())
