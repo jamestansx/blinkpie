@@ -1,3 +1,65 @@
+"""
+POST
+ FORMAT:
+    data = {
+        "data":
+            {
+                "parameter": "value"
+            }
+    }
+    notification = {
+        "notification":
+            {
+                "title": "message"
+            }
+    }
+    profile = {
+        "profile":
+            {
+                "UUID": "uuid",
+                "name": "hardwarename",
+                "description": "description",
+            }
+    }
+ STORAGE:
+    "data": [
+        {
+            "parameter1": "value"
+        },
+        {
+            "parameter2": "value"
+        }
+    ]
+
+    "notification": [
+        {
+            "title1": "message"
+        },
+        {
+            "title2": "message"
+        }
+    ]
+
+    "profile": [
+        {
+            "UUID": "uuid1",
+            "name": "hardwarename1",
+            "description": "description1",
+        },
+        {
+            "UUID": "uuid2",
+            "name": "hardwarename2",
+            "description": "description2",
+        }
+    ]
+
+----------------------------------------------------------------
+GET FORMAT:
+    data = {"data" : "parameter"}
+    notification = {"notification": "title"}
+    profile = {"profile": "my_uuid"}
+"""
+
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -50,9 +112,9 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
             )
         )
         self.params = {
-            "data": "data",
-            "notification": "notification",
-            "profile": "profile",
+            "data": self.database,
+            "notification": self.database,
+            "profile": self.profiledb,
         }
         super(BlinkpieHandler, self).__init__(*args, **kwargs)
 
@@ -61,9 +123,9 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "application/json")
         self.end_headers()
 
-    def _check_content_validity(self, params: str):
+    def _check_content_validity(self, params: dict):
         for param in self.params:
-            if self.params[param] in params:
+            if param in params:
                 return True
         else:
             logger.error("Invalid GET/POST parameters!")
@@ -71,34 +133,27 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         params = urlparse(self.path).query
+        params = dict(qc.split("=") for qc in params.split("&"))
+        logger.debug("GET: %s", params)
         if not self._check_content_validity(params):
             self.send_response(400)
             return
-        try:
-            # PROFILE
-            params = dict(qc.split("=") for qc in params.split("&"))
-            with open(self.profiledb, "r") as f:
-                content = json.loads(f.read())
-                content = content[self.params["profile"]]
-                for profiles in content:
-                    if profiles["UUID"] == params["profile"]:
-                        self._set_response()
-                        self.wfile.write(json.dumps(profiles).encode())
-                        return
-                else:
-                    logger.error("No such profile")
-                    self._set_response(404)
-        except ValueError as e:
-            # NOTIFICATION or DATA
-            with open(self.database, "r") as f:
-                try:
-                    content = json.loads(f.read())
-                    self._set_response()
-                    self.wfile.write(content[params].encode())
-                except json.JSONDecodeError as e:
-                    logger.warning("File is empty: %s" % e)
-                    self._set_response(404)
+        with open(self.params[next(iter(params))], "r") as f:
+            logger.debug("Opening %s", self.params[next(iter(params))])
+            content: list = json.loads(f.read())[next(iter(params))]
+            logger.debug("Read %s", content)
+            for key in content:
+                logger.debug("key: %s", key)
+                logger.debug("params key: %s", params[next(iter(params))])
+                if (next(iter(params)) == "profile") and self._check_profile(key, params):
                     return
+                else:
+                    if params[next(iter(params))] in key:
+                        self._set_response()
+                        self.wfile.write(key[params[next(iter(params))]].encode())
+                        return
+            else:
+                self._set_response(404)
 
     def do_POST(self):
         content_length = int(self.headers["Content-Length"])
@@ -141,6 +196,18 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
                         data[key] = value
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
+
+    def _check_profile(self,key: dict,params: dict) -> bool:
+        logger.debug("Checking profile")
+        logger.debug("key: %s", key)
+        logger.debug("key content: %s", key[next(iter(key))])
+        logger.debug("params content: %s", params[next(iter(params))])
+        if key[next(iter(key))] == params[next(iter(params))]:
+            self._set_response()
+            self.wfile.write(json.dumps(key).encode())
+            return True
+        return False
+
 
 
 def main(serveraddress: Tuple, certfile: str):
