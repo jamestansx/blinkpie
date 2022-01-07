@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from requests import get, post
 from requests.packages import urllib3
@@ -46,6 +47,6 @@ def do_get(server: str, params: str or dict = None):
     return get_data
 
 
-def do_post(server: str, post_data: dict):
+def do_post(server: str, post_data: dict[str,Any]):
     logger.debug("POST: %s", post_data)
     return post(server, verify=False, json=post_data)

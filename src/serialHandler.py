@@ -54,7 +54,7 @@ def setProfile(uuid):
         "profile": {"UUID": uuid, "name": name, "description": description},
     }
 
-    return do_post(server, json.dumps(dicts))
+    return do_post(server, dicts)
 
 
 def connect(get_data:str):
