@@ -4,7 +4,11 @@ from socket import gethostbyname, gethostname
 
 from serial import Serial
 
-from serialtools import *
+try:
+    from serialtools import *
+except Exception as e:
+    print(e)
+    input("")
 
 logger.level = logging.DEBUG
 appname = "blinkpie"
@@ -34,24 +38,35 @@ def setProfile(uuid):
     dicts = {
         "profile": {"UUID": uuid, "name": name, "description": description},
     }
-
     return do_post(server, dicts)
 
 
-def connect(get_data:str):
+def connect(get_data: str):
     logger.debug(f"Connecting to Arduino: {get_data}")
     data = do_get(server, json.loads(get_data))
+    logger.debug(f"data {data}")
     content = json.loads(data.text)
     status = data.status_code
     if status == 200:
         logger.info("Connected to device:")
         logger.info(f"Name: {content['name']}")
         logger.info(f"Description: {content['description']}")
-        do_write(port, SUCCESS_CODE)
+        do_write(port, "200")
         return True
     elif status == 404:
         logger.warning("Arduino is not registered.. Please setup again")
         return False
+
+
+def is_available():
+    status = ""
+    while status != SUCCESS_CODE:
+        logger.debug("checking handshake")
+        status = do_read(port)
+        if "profile" in status:
+            if not connect(status):
+                setProfile(genUUID())
+            break
 
 
 def main():
@@ -65,15 +80,12 @@ def main():
             is_GET = parse_data(readData)
             if is_GET:
                 logger.info("GET <--- SERVER")
-                getData = do_get(server, readData)
-                do_write(port, getData.text)
-                status = ""
-                while status != SUCCESS_CODE:
-                    status = do_read(port)
-                    if "profile" in status:
-                        if not connect(status):
-                            setProfile(genUUID())
-                        break
+                getData = do_get(server, json.loads(readData))
+                if getData.status_code == 404:
+                    do_write(port, "404")
+                else:
+                    do_write(port, getData.text)
+                is_available()
             else:
                 logger.info("POST ---> SERVER")
                 _ = do_post(server, json.loads(readData))

@@ -127,7 +127,9 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
             return False
 
     def do_GET(self):
+        logger.debug(self.path)
         params = urlparse(self.path).query
+        logger.debug(params)
         params = dict(qc.split("=") for qc in params.split("&"))
         if not self._check_content_validity(params):
             self.send_response(400)
@@ -152,6 +154,7 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
         content: dict = json.loads(
             str(self.rfile.read(content_length).decode())
         )
+        logger.info(content)
         if not self._check_content_validity(content):
             self._set_response(400)
             return

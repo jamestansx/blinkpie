@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+import json
 
 from requests import get, post
 from requests.packages import urllib3
@@ -35,18 +36,19 @@ def do_write(port: Serial, write_data: str):
     logger.debug("Write: %s", write_data)
 
 
-def parse_data(string: str) -> bool:
-    if string.strip(" \r\t\n") == "data":
-        return True
-    return False
+def parse_data(string) -> bool:
+    string = json.loads(string.strip(" \r\t\n$0"))
+    if isinstance(string[next(iter(string))], dict):
+        return False  # GET
+    return True  # POST
 
 
-def do_get(server: str, params: str or dict = None):
+def do_get(server: str, params: dict = None):
     get_data = get(server, verify=False, params=params)
     logger.debug("GET data: %s", get_data.text)
     return get_data
 
 
-def do_post(server: str, post_data: dict[str,Any]):
+def do_post(server: str, post_data: dict[str, Any]):
     logger.debug("POST: %s", post_data)
     return post(server, verify=False, json=post_data)
