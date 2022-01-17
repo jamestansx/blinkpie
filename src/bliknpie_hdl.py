@@ -1,15 +1,16 @@
 import argparse
 import json
 import logging
-from socket import gethostbyname, gethostname
+import socket
 import sys
 
 import serial
+
 from serialtools import SerialTools
 
 appname = "blinkpie"
 authorname = "jamestansx"
-iplink = gethostbyname(gethostname())
+iplink = socket.gethostbyname(socket.gethostname())
 server = "https://" + iplink + ":443"
 SUCCESS_CODE = "200"
 
@@ -19,9 +20,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 logger.level = logging.DEBUG
-
-
-
 
 
 def init(st):
@@ -37,7 +35,7 @@ def init(st):
     print("-------------------------------")
 
 
-def setProfile(st,uuid):
+def setProfile(st, uuid):
     name = input("Arduino name? ")
     description = input("Description[optional]: ")
     dicts = {
@@ -46,7 +44,7 @@ def setProfile(st,uuid):
     return st.do_post(server, dicts)
 
 
-def connect(st,get_data: str):
+def connect(st, get_data: str):
     logger.debug(f"Connecting to Arduino: {get_data}")
     data = st.do_get(server, json.loads(get_data))
     logger.debug(f"data {data}")
@@ -70,7 +68,7 @@ def is_available(st):
         status = st.do_read(port)
         if "profile" in status:
             if not connect(status):
-                setProfile(genUUID())
+                setProfile(st.genUUID())
             break
 
 
@@ -79,10 +77,10 @@ def main(st):
         try:
             readData = st.do_read(port)
             if "profile" in readData:
-                if not connect(st,readData):
-                    setProfile(st,genUUID())
+                if not connect(st, readData):
+                    setProfile(st, st.genUUID())
                 continue
-            is_GET = parse_data(st,readData)
+            is_GET = st.parse_data(st, readData)
             if is_GET:
                 logger.info("GET <--- SERVER")
                 getData = st.do_get(server, json.loads(readData))
@@ -96,11 +94,13 @@ def main(st):
                 _ = st.do_post(server, json.loads(readData))
                 st.do_write(port, SUCCESS_CODE)
         except KeyboardInterrupt:
-            inputs = input("Exit?[y|n(restart)] ")
-            if inputs == "n":
+            inputs = input("Exit?[y|r(restart)|n] ")
+            if inputs == "r":
                 logger.info("restarting virtual ports handler")
                 continue
-            else:
+            elif inputs == "n":
+                continue
+            elif inputs == "y":
                 logger.info("exiting virtual ports handler...")
                 exit(0)
         except Exception as e:
@@ -110,15 +110,42 @@ def main(st):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port",nargs='?', default="COM1", help="specify port number to use (COM1)", type=str)
-    parser.add_argument("--baudrate", nargs='?', default="9600", help="specify baudrate (9600)", type=str)
-    parser.add_argument("--timeout", nargs='?', default=.1, help="specify port number to use (COMX)", type=float)
-    parser.add_argument("--write_timeout", nargs='?', default=.1, help="specify port number to use (COMX)", type=float)
+    parser.add_argument(
+        "--port",
+        nargs="?",
+        default="COM1",
+        help="specify port number to use (COM1)",
+        type=str,
+    )
+    parser.add_argument(
+        "--baudrate",
+        nargs="?",
+        default="9600",
+        help="specify baudrate (9600)",
+        type=str,
+    )
+    parser.add_argument(
+        "--timeout",
+        nargs="?",
+        default=0.1,
+        help="specify port read/write timeout (0.1)",
+        type=float,
+    )
+    parser.add_argument(
+        "--write_timeout",
+        nargs="?",
+        default=0.1,
+        help="specify write timeout (0.1)",
+        type=float,
+    )
     args = parser.parse_args()
 
-    try: 
+    try:
         port = serial.Serial(
-                port=args.port, baudrate=args.baudrate, timeout=args.timeout, write_timeout=args.write_timeout
+            port=args.port,
+            baudrate=args.baudrate,
+            timeout=args.timeout,
+            write_timeout=args.write_timeout,
         )
     except Exception as e:
         logger.exception("Port not found!")

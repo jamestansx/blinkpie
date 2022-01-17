@@ -54,14 +54,13 @@ GET FORMAT:
     profile = {"profile": "my_uuid"}
 """
 
+import argparse
 import json
 import logging
 import os
+import pathlib
+import ssl
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from os import makedirs
-from os.path import exists, join
-from pathlib import Path
-from ssl import wrap_socket
 from typing import Tuple
 from urllib.parse import urlparse
 
@@ -80,13 +79,13 @@ logger = logging.getLogger()
 
 
 def is_path_exist(path: str):
-    if not Path(path).is_dir():
-        makedirs(path, exist_ok=True)
+    if not pathlib.Path(path).is_dir():
+        os.makedirs(path, exist_ok=True)
     return path
 
 
 def is_file_exist(fpath: str):
-    if not exists(fpath):
+    if not os.exists(fpath):
         with open(fpath, "w+"):
             ...
     return fpath
@@ -95,13 +94,13 @@ def is_file_exist(fpath: str):
 class BlinkpieHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.database = is_file_exist(
-            join(
+            os.join(
                 is_path_exist(user_data_dir(appname, authorname)),
                 dbpath,
             )
         )
         self.profiledb = is_file_exist(
-            join(
+            os.join(
                 is_path_exist(user_data_dir(appname, authorname)),
                 profilepath,
             )
@@ -208,7 +207,7 @@ class BlinkpieHandler(BaseHTTPRequestHandler):
 def main(serveraddress: Tuple, certfile: str):
 
     httpd = HTTPServer(serveraddress, BlinkpieHandler)
-    httpd.socket = wrap_socket(
+    httpd.socket = ssl.wrap_socket(
         httpd.socket, certfile=certfile, server_side=True
     )
     try:
@@ -219,6 +218,14 @@ def main(serveraddress: Tuple, certfile: str):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--path",
+        nargs="?",
+        default="..\\server.pem",
+        help="Path to ssl certfile [..\\server.pem]",
+        type=str,
+    )
+    args = parser.parse_args()
     serveraddress = ("0.0.0.0", 443)
-    certfile = ".\\server.pem"
-    main(serveraddress, certfile)
+    main(serveraddress, args.path)
