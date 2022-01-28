@@ -30,3 +30,7 @@ To display help message:
 blinkpie_ser --help
 blinkpie_hdl --help
 ```
+
+## Related Projects
+- GUI: https://github.com/jamestansx/blinkpie-gui
+- Arduino library: https://github.com/jamestansx/blinkpie-arduino
